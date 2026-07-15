@@ -1,0 +1,168 @@
+/**
+ * @file    sensor.c
+ * @brief   环境传感器驱动实现 (轮询模式)
+ *
+ * 硬件连接：
+ *   PA0 → ADC1_IN0 → LDR 光敏模块 AO (模拟输出)
+ *   PA1 → ADC1_IN1 → NTC 热敏模块 AO (模拟输出)
+ *
+ * 使用轮询模式而非 DMA，避免 DMA 配置兼容性问题。
+ * 每秒采样一次，轮询速度完全满足需求。
+ */
+
+#include "sensor.h"
+#include "adc.h"
+
+/* ===================== 滤波器配置 ===================== */
+#define FILTER_WINDOW  8    /* 滑动窗口大小 */
+
+/* ===================== NTC 参数 ===================== */
+/* 10k NTC B=3950, 10k 分压电阻上拉至 3.3V, 温度查表法 */
+
+/* ===================== 光照阈值 ===================== */
+#define LDR_THRESH_DARK    3000
+#define LDR_THRESH_BRIGHT  1200
+
+/* ===================== 温度阈值 ===================== */
+#define TEMP_THRESH_COLD   18.0f
+#define TEMP_THRESH_HOT    30.0f
+
+/* ===================== 全局数据 ===================== */
+static SensorData_t g_sensor;
+
+/* 滑动窗口滤波 */
+static uint16_t ldr_window[FILTER_WINDOW];
+static uint16_t ntc_window[FILTER_WINDOW];
+static uint8_t  filter_index = 0;
+static uint8_t  filter_count = 0;
+
+/* ===================== 初始化 ===================== */
+
+void Sensor_Init(void)
+{
+    for (uint8_t i = 0; i < FILTER_WINDOW; i++) {
+        ldr_window[i] = 0;
+        ntc_window[i] = 0;
+    }
+    /* ADC 已在 MX_ADC1_Init() 中初始化 */
+    /* 关闭连续转换模式，改为单次扫描（每次 Sensor_Update 手动触发） */
+    ADC1->CR2 &= ~ADC_CR2_CONT;
+}
+
+/* ===================== 滑动平均滤波器 ===================== */
+
+static uint16_t sliding_avg(uint16_t *window, uint16_t new_val)
+{
+    window[filter_index] = new_val;
+    uint32_t sum = 0;
+    uint8_t count = (filter_count < FILTER_WINDOW) ? (filter_count + 1) : FILTER_WINDOW;
+    for (uint8_t i = 0; i < count; i++) {
+        sum += window[i];
+    }
+    return (uint16_t)(sum / count);
+}
+
+/* ===================== 更新采集 ===================== */
+
+void Sensor_Update(void)
+{
+    /* ---- 轮询方式采集 ADC ---- */
+    /* 1. 停止之前的连续转换 */
+    HAL_ADC_Stop(&hadc1);
+
+    /* 2. 启动 ADC */
+    HAL_ADC_Start(&hadc1);
+
+    /* 3. 等待通道0 (LDR) 转换完成并读取 */
+    if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK) {
+        g_sensor.ldr_adc = HAL_ADC_GetValue(&hadc1);
+    }
+
+    /* 4. 等待通道1 (NTC) 转换完成并读取 */
+    if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK) {
+        g_sensor.ntc_adc = HAL_ADC_GetValue(&hadc1);
+    }
+
+    /* 5. 停止 ADC */
+    HAL_ADC_Stop(&hadc1);
+
+    /* ---- 滑动平均滤波 ---- */
+    if (filter_count < FILTER_WINDOW) filter_count++;
+    g_sensor.light_raw = sliding_avg(ldr_window, g_sensor.ldr_adc);
+    g_sensor.temp_raw  = sliding_avg(ntc_window, g_sensor.ntc_adc);
+    filter_index = (filter_index + 1) % FILTER_WINDOW;
+
+    /* ---- 光照等级判定 ---- */
+    if (g_sensor.light_raw > LDR_THRESH_DARK) {
+        g_sensor.light = LIGHT_DARK;
+    } else if (g_sensor.light_raw < LDR_THRESH_BRIGHT) {
+        g_sensor.light = LIGHT_BRIGHT;
+    } else {
+        g_sensor.light = LIGHT_NORMAL;
+    }
+
+    /* ---- NTC 温度计算 (查表+线性插值) ---- */
+    /* 10k NTC B=3950, 10k 上拉电阻, 3.3V, 12-bit ADC
+     * 关键点 (ADC值, 温度°C):
+     *   ADC=500 → ~58°C, ADC=1000 → ~39°C, ADC=1500 → ~27°C
+     *   ADC=2048 → ~17°C, ADC=2500 → ~11°C, ADC=3000 → ~5°C
+     *   ADC=3500 → ~0°C,  ADC=4000 → ~-10°C */
+    static const int16_t lut_adc[] = {
+        500, 1000, 1500, 2048, 2500, 3000, 3500, 4000
+    };
+    static const float lut_temp[] = {
+        58.0f, 39.0f, 27.0f, 17.0f, 11.0f, 5.0f, 0.0f, -10.0f
+    };
+    const int n = sizeof(lut_adc) / sizeof(lut_adc[0]);
+
+    uint16_t adc_val = g_sensor.temp_raw;
+    float temp_c = 25.0f;  /* default */
+
+    if (adc_val <= lut_adc[0]) {
+        temp_c = lut_temp[0];
+    } else if (adc_val >= lut_adc[n - 1]) {
+        temp_c = lut_temp[n - 1];
+    } else {
+        /* 线性插值 */
+        for (int i = 0; i < n - 1; i++) {
+            if (adc_val >= lut_adc[i] && adc_val <= lut_adc[i + 1]) {
+                float t = (float)(adc_val - lut_adc[i])
+                        / (float)(lut_adc[i + 1] - lut_adc[i]);
+                temp_c = lut_temp[i] + t * (lut_temp[i + 1] - lut_temp[i]);
+                break;
+            }
+        }
+    }
+    g_sensor.temp_celsius = temp_c;
+
+    /* ---- 温度等级判定 ---- */
+    if (g_sensor.temp_celsius < TEMP_THRESH_COLD) {
+        g_sensor.temp = TEMP_COLD;
+    } else if (g_sensor.temp_celsius > TEMP_THRESH_HOT) {
+        g_sensor.temp = TEMP_HOT;
+    } else {
+        g_sensor.temp = TEMP_COMFORT;
+    }
+}
+
+/* ===================== 数据访问 ===================== */
+
+const SensorData_t* Sensor_GetData(void)
+{
+    return &g_sensor;
+}
+
+LightLevel_t Sensor_GetLightLevel(void)
+{
+    return g_sensor.light;
+}
+
+TempLevel_t Sensor_GetTempLevel(void)
+{
+    return g_sensor.temp;
+}
+
+float Sensor_GetTempCelsius(void)
+{
+    return g_sensor.temp_celsius;
+}
