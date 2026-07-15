@@ -1,0 +1,36 @@
+# STM32CubeIDE / Keil MDK 编译产物
+Debug/
+Release/
+build/
+Objects/
+Listings/
+\*.hex
+\*.bin
+\*.elf
+\*.axf
+\*.map
+\*.o
+\*.d
+\*.crf
+\*.dep
+\*.htm
+\*.siz
+
+# Keil 工程临时文件
+\*.uvgui
+\*.uvgui.\*
+\*.bak
+\*.lst
+
+# STM32CubeMX 生成缓存
+\*.ioc.backup
+.cubemx/
+
+# IDE 配置
+.idea/
+.vscode/
+\*.swp
+\*.swo
+\*~
+.DS\_Store
+Thumbs.db
