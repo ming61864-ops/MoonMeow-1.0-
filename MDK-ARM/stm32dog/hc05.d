@@ -33,5 +33,12 @@ stm32dog\hc05.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_spi.h
 stm32dog\hc05.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h
 stm32dog\hc05.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h
 stm32dog\hc05.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h
+stm32dog\hc05.o: ../Core/Inc/pet_fsm.h
 stm32dog\hc05.o: ../Core/Inc/usart.h
+stm32dog\hc05.o: ../Core/Inc/sensor.h
+stm32dog\hc05.o: ../Core/Inc/buzzer.h
+stm32dog\hc05.o: ../Core/Inc/flash_config.h
 stm32dog\hc05.o: D:\keilv5.36\Core\ARM\ARMCC\Bin\..\include\stdio.h
+stm32dog\hc05.o: D:\keilv5.36\Core\ARM\ARMCC\Bin\..\include\string.h
+stm32dog\hc05.o: D:\keilv5.36\Core\ARM\ARMCC\Bin\..\include\stdarg.h
+stm32dog\hc05.o: D:\keilv5.36\Core\ARM\ARMCC\Bin\..\include\stdlib.h

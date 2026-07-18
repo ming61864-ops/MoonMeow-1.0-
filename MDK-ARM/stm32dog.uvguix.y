@@ -1865,18 +1865,18 @@
       <ActiveTab>1</ActiveTab>
       <Doc>
         <Name>../Core/Src/main.c</Name>
-        <ColumnNumber>16</ColumnNumber>
-        <TopLine>1</TopLine>
-        <CurrentLine>122</CurrentLine>
+        <ColumnNumber>14</ColumnNumber>
+        <TopLine>87</TopLine>
+        <CurrentLine>123</CurrentLine>
         <Folding>1</Folding>
         <ContractedFolders></ContractedFolders>
         <PaneID>0</PaneID>
       </Doc>
       <Doc>
         <Name>../Core/Src/usart.c</Name>
-        <ColumnNumber>0</ColumnNumber>
-        <TopLine>157</TopLine>
-        <CurrentLine>1</CurrentLine>
+        <ColumnNumber>27</ColumnNumber>
+        <TopLine>53</TopLine>
+        <CurrentLine>73</CurrentLine>
         <Folding>1</Folding>
         <ContractedFolders></ContractedFolders>
         <PaneID>0</PaneID>
@@ -1892,9 +1892,9 @@
       </Doc>
       <Doc>
         <Name>..\Core\Src\hc05.c</Name>
-        <ColumnNumber>0</ColumnNumber>
+        <ColumnNumber>3</ColumnNumber>
         <TopLine>1</TopLine>
-        <CurrentLine>1</CurrentLine>
+        <CurrentLine>15</CurrentLine>
         <Folding>1</Folding>
         <ContractedFolders></ContractedFolders>
         <PaneID>0</PaneID>

@@ -42,6 +42,7 @@
 #include "cat_hot.h"
 #include "flash_config.h"
 #include "hc05.h"
+#include "esp8266.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -139,6 +140,7 @@ int main(void)
   Sensor_Init();
   Buzzer_Init();
   HC05_Init();
+  ESP8266_Init();
   PetFSM_Init();
 
   /* Boot screen */
@@ -222,39 +224,19 @@ int main(void)
         }
     }
 
-    /* ---- HC-05 蓝牙命令 (与串口相同, 单字符) ---- */
+    /* ---- HC-05 蓝牙命令 ---- */
     {
-        int ch = HC05_GetChar();
-        if (ch >= 0) {
-            switch (ch) {
-                case 't': case 'T':
-                    pet_cmd = CMD_TOUCH;
-                    Buzzer_Beep(30);
-                    printf("[BT-TOUCH]\r\n");
-                    break;
-                case 'f': case 'F':
-                    pet_cmd = CMD_FEED;
-                    Buzzer_Beep(30);
-                    printf("[BT-FEED]\r\n");
-                    break;
-                case 's': case 'S':
-                    last_status = 0;
-                    printf("[BT-STATUS]\r\n");
-                    break;
-                case 'z': case 'Z':
-                    pet_cmd = CMD_SLEEP;
-                    Buzzer_Beep(30);
-                    printf("[BT-SLEEP]\r\n");
-                    break;
-                case 'h': case 'H':
-                    printf("\r\n=== CAT PET COMMANDS (BT) ===\r\n");
-                    printf("  t - touch   f - feed\r\n");
-                    printf("  z - sleep   s - status\r\n");
-                    printf("==============================\r\n\n");
-                    break;
-                default:
-                    break;
-            }
+        PetCmd_t bt_cmd = HC05_Process();
+        if (bt_cmd != CMD_NONE) {
+            pet_cmd = bt_cmd;
+        }
+    }
+
+    /* ---- ESP-01S WiFi 云端指令 ---- */
+    {
+        PetCmd_t cloud_cmd = ESP8266_Process();
+        if (cloud_cmd != CMD_NONE) {
+            pet_cmd = cloud_cmd;
         }
     }
 
@@ -369,6 +351,11 @@ int main(void)
                sn[PetFSM_GetState()],
                an[PetFSM_GetAnimSlot()],
                Sensor_GetLDR(), Sensor_GetNTC());
+
+        /* 通过 ESP-01S 上报云端 */
+        ESP8266_Send("STATUS,%s,%d,%d",
+                     sn[PetFSM_GetState()],
+                     Sensor_GetLDR(), Sensor_GetNTC());
     }
 
     /* ---- 蜂鸣器 ---- */

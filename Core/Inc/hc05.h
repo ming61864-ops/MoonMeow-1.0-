@@ -1,20 +1,19 @@
 /**
  * @file    hc05.h
- * @brief   HC-05 蓝牙模块 — USART2 透传, 9600 8N1
+ * @brief   HC-05 蓝牙模块 — 单字符命令 (9600 8N1)
  *
- * 接线: HC-05 TXD → PA3 (USART2_RX), HC-05 RXD → PA2 (USART2_TX)
+ * 命令: t=摸头 f=喂食 z=睡觉 s=状态 h=帮助
+ *       1=查询温度 2=查询温度+亮度
+ *       3/4=高温阈值±50 5/6=暗光阈值±50
  */
 #ifndef __HC05_H
 #define __HC05_H
 
 #include "main.h"
+#include "pet_fsm.h"
 
 void HC05_Init(void);
-
-/**
- * @brief 从 USART2 读取一个字节 (非阻塞)
- * @return 0~255=有效字节, -1=无数据
- */
-int HC05_GetChar(void);
+void HC05_Printf(const char *fmt, ...);
+PetCmd_t HC05_Process(void);
 
 #endif
