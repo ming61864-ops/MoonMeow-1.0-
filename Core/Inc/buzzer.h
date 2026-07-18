@@ -1,6 +1,6 @@
 /**
  * @file    buzzer.h
- * @brief   有源蜂鸣器 - PA2 GPIO/TIM2 PWM 音量控制
+ * @brief   有源蜂鸣器 - PB0 GPIO 直接开关
  */
 #ifndef __BUZZER_H
 #define __BUZZER_H

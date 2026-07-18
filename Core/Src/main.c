@@ -41,6 +41,7 @@
 #include "cat_sleep.h"
 #include "cat_hot.h"
 #include "flash_config.h"
+#include "hc05.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -137,6 +138,7 @@ int main(void)
   FlashConfig_Load();  /* 必须在 Sensor_Init 之前, 加载已保存阈值 */
   Sensor_Init();
   Buzzer_Init();
+  HC05_Init();
   PetFSM_Init();
 
   /* Boot screen */
@@ -217,6 +219,42 @@ int main(void)
                 break;
             default:
                 break;  /* 忽略 \r \n 等 */
+        }
+    }
+
+    /* ---- HC-05 蓝牙命令 (与串口相同, 单字符) ---- */
+    {
+        int ch = HC05_GetChar();
+        if (ch >= 0) {
+            switch (ch) {
+                case 't': case 'T':
+                    pet_cmd = CMD_TOUCH;
+                    Buzzer_Beep(30);
+                    printf("[BT-TOUCH]\r\n");
+                    break;
+                case 'f': case 'F':
+                    pet_cmd = CMD_FEED;
+                    Buzzer_Beep(30);
+                    printf("[BT-FEED]\r\n");
+                    break;
+                case 's': case 'S':
+                    last_status = 0;
+                    printf("[BT-STATUS]\r\n");
+                    break;
+                case 'z': case 'Z':
+                    pet_cmd = CMD_SLEEP;
+                    Buzzer_Beep(30);
+                    printf("[BT-SLEEP]\r\n");
+                    break;
+                case 'h': case 'H':
+                    printf("\r\n=== CAT PET COMMANDS (BT) ===\r\n");
+                    printf("  t - touch   f - feed\r\n");
+                    printf("  z - sleep   s - status\r\n");
+                    printf("==============================\r\n\n");
+                    break;
+                default:
+                    break;
+            }
         }
     }
 

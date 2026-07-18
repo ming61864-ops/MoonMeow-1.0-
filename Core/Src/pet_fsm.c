@@ -132,7 +132,7 @@ apply_state:
             break;
         case STATE_HAPPY:
             g_anim_slot = ANIM_HAPPY;
-            if (g_cmd_active) g_melody = MELODY_HAPPY;
+            if (now - g_state_enter < 500) g_melody = MELODY_HAPPY;
             break;
         case STATE_SLEEP:
             g_anim_slot = ANIM_SLEEP;
@@ -140,7 +140,7 @@ apply_state:
             break;
         case STATE_SURPRISE:
             g_anim_slot = ANIM_SURPRISE;
-            if (g_cmd_active) g_melody = MELODY_SURPRISE;
+            if (now - g_state_enter < 500) g_melody = MELODY_SURPRISE;
             break;
         case STATE_HOT:
             g_anim_slot = ANIM_HOT;

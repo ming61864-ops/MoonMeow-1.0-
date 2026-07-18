@@ -103,24 +103,12 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef* timHandle)
 {
 
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
   if(timHandle->Instance==TIM2)
   {
   /* USER CODE BEGIN TIM2_MspPostInit 0 */
-
+    /* PA2 已释放给 USART2_TX (HC-05), PA15 未使用.
+       TIM2 PWM 输出实际未被 buzzer.c 使用, 因此不配置 AF 引脚. */
   /* USER CODE END TIM2_MspPostInit 0 */
-
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    /**TIM2 GPIO Configuration
-    PA2     ------> TIM2_CH3
-    PA15     ------> TIM2_CH1
-    */
-    GPIO_InitStruct.Pin = GPIO_PIN_15;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-    __HAL_AFIO_REMAP_TIM2_PARTIAL_1();
 
   /* USER CODE BEGIN TIM2_MspPostInit 1 */
 

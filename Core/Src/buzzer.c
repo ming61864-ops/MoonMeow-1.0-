@@ -3,7 +3,8 @@
  * @brief   有源蜂鸣器(低电平触发) - GPIO直接开关
  *
  * 有源蜂鸣器自带振荡器, 通电就响.
- * PA2: HIGH=静音, LOW=发声.
+ * PB0: HIGH=静音, LOW=发声.
+ * (从 PA2 迁移到 PB0, 释放 PA2 给 USART2_TX 接 HC-05)
  */
 #include "buzzer.h"
 #include "gpio.h"
@@ -13,22 +14,22 @@ static void melody_update(void);  /* 前置声明 */
 
 static void buzzer_on(void)
 {
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);  /* LOW=响 */
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);  /* LOW=响 */
 }
 
 static void buzzer_off(void)
 {
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);    /* HIGH=静音 */
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);    /* HIGH=静音 */
 }
 
 void Buzzer_Init(void)
 {
     GPIO_InitTypeDef g = {0};
-    g.Pin   = GPIO_PIN_2;
+    g.Pin   = GPIO_PIN_0;
     g.Mode  = GPIO_MODE_OUTPUT_PP;
     g.Pull  = GPIO_PULLUP;
     g.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOA, &g);
+    HAL_GPIO_Init(GPIOB, &g);
     buzzer_off();  /* 默认静音 */
 }
 

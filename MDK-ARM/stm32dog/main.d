@@ -52,3 +52,4 @@ stm32dog\main.o: ../Core/Inc/cat_anim2.h
 stm32dog\main.o: ../Core/Inc/cat_sleep.h
 stm32dog\main.o: ../Core/Inc/cat_hot.h
 stm32dog\main.o: ../Core/Inc/flash_config.h
+stm32dog\main.o: ../Core/Inc/hc05.h
