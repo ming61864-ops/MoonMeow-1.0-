@@ -20,6 +20,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f1xx_it.h"
+#include "usart.h"
+#include "esp8266.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 /* USER CODE END Includes */
@@ -199,5 +201,17 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /* USER CODE BEGIN 1 */
+
+/**
+  * @brief This function handles USART3 global interrupt.
+  * 只做一件事: 把收到的字节存入 esp8266.c 的环形缓冲区, 不做阻塞操作.
+  */
+void USART3_IRQHandler(void)
+{
+    if (__HAL_UART_GET_FLAG(&huart3, UART_FLAG_RXNE)) {
+        uint8_t byte = (uint8_t)(huart3.Instance->DR & 0xFF);
+        ESP8266_RxIRQPush(byte);
+    }
+}
 
 /* USER CODE END 1 */

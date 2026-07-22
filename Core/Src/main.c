@@ -127,6 +127,8 @@ int main(void)
   MX_SPI1_Init();
   MX_TIM2_Init();
   MX_USART1_UART_Init();
+  MX_USART3_UART_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   printf("================================\r\n");
   printf("  STM32 MoonCat v2.0\r\n");
@@ -168,7 +170,19 @@ int main(void)
     static uint32_t last_sensor = 0;
     static uint32_t last_led = 0;
     static uint32_t last_status = 0;
+    static uint32_t last_report = 0;
     uint32_t now = HAL_GetTick();
+
+    /* ---- ESP-01S WiFi 状态上报 (5s) ---- */
+    if (now - last_report >= 5000) {
+        last_report = now;
+        const char *sn[] = {"IDLE","HAPPY","SLEEP","SURPRISE","HOT"};
+        printf("[ESP-SEND] tick=%lu\r\n", (unsigned long)now);  /* 诊断: 确认STM32实际发送节奏 */
+        ESP8266_Send("STATUS,%s,%d,%d",
+                     sn[PetFSM_GetState()],
+                     Sensor_GetLDR(),
+                     Sensor_GetNTC());
+    }
 
     /* ---- 串口命令接收 (单字符即时触发, 不需要回车) ---- */
     static PetCmd_t pet_cmd = CMD_NONE;
@@ -351,11 +365,6 @@ int main(void)
                sn[PetFSM_GetState()],
                an[PetFSM_GetAnimSlot()],
                Sensor_GetLDR(), Sensor_GetNTC());
-
-        /* 通过 ESP-01S 上报云端 */
-        ESP8266_Send("STATUS,%s,%d,%d",
-                     sn[PetFSM_GetState()],
-                     Sensor_GetLDR(), Sensor_GetNTC());
     }
 
     /* ---- 蜂鸣器 ---- */

@@ -25,8 +25,8 @@
 /* USER CODE END 0 */
 
 UART_HandleTypeDef huart1;
-UART_HandleTypeDef huart2;   /* HC-05 蓝牙 */
-UART_HandleTypeDef huart3;   /* ESP-01S WiFi */
+UART_HandleTypeDef huart2;
+UART_HandleTypeDef huart3;
 
 /* USART1 init function */
 
@@ -57,8 +57,7 @@ void MX_USART1_UART_Init(void)
   /* USER CODE END USART1_Init 2 */
 
 }
-
-/* USART2 init function — HC-05 蓝牙 */
+/* USART2 init function */
 
 void MX_USART2_UART_Init(void)
 {
@@ -71,7 +70,7 @@ void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 9600;
+  huart2.Init.BaudRate = 115200;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
@@ -87,8 +86,7 @@ void MX_USART2_UART_Init(void)
   /* USER CODE END USART2_Init 2 */
 
 }
-
-/* USART3 init function — ESP-01S WiFi */
+/* USART3 init function */
 
 void MX_USART3_UART_Init(void)
 {
@@ -149,7 +147,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
 
   /* USER CODE END USART1_MspInit 1 */
   }
-  if(uartHandle->Instance==USART2)
+  else if(uartHandle->Instance==USART2)
   {
   /* USER CODE BEGIN USART2_MspInit 0 */
 
@@ -176,7 +174,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
 
   /* USER CODE END USART2_MspInit 1 */
   }
-  if(uartHandle->Instance==USART3)
+  else if(uartHandle->Instance==USART3)
   {
   /* USER CODE BEGIN USART3_MspInit 0 */
 
@@ -226,7 +224,7 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 
   /* USER CODE END USART1_MspDeInit 1 */
   }
-  if(uartHandle->Instance==USART2)
+  else if(uartHandle->Instance==USART2)
   {
   /* USER CODE BEGIN USART2_MspDeInit 0 */
 
@@ -244,7 +242,7 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 
   /* USER CODE END USART2_MspDeInit 1 */
   }
-  if(uartHandle->Instance==USART3)
+  else if(uartHandle->Instance==USART3)
   {
   /* USER CODE BEGIN USART3_MspDeInit 0 */
 

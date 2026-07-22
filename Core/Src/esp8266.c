@@ -2,7 +2,8 @@
  * @file    esp8266.c
  * @brief   ESP-01S WiFi 模块驱动 — USART3 文本协议
  *
- * 使用 PB10(TX)/PB11(RX), 与 USART1/USART2 相同的轮询方式.
+ * 使用 PB10(TX)/PB11(RX). RX 采用中断+环形缓冲区接收,
+ * 避免 115200bps 突发数据在主循环阻塞期间 (如OLED渲染) 被覆盖丢失.
  * 接收侧用行缓冲, 遇到 \n 解析指令.
  */
 #include "esp8266.h"
@@ -15,19 +16,37 @@
 static char  g_rx_buf[64];
 static uint8_t g_rx_idx = 0;
 
+/* 中断接收环形缓冲区 (ISR只写, 主循环只读, 单生产者单消费者无需加锁) */
+#define ESP_RXBUF_SIZE 128
+static volatile uint8_t  g_irq_buf[ESP_RXBUF_SIZE];
+static volatile uint16_t g_irq_head = 0;  /* ISR 写入位置 */
+static volatile uint16_t g_irq_tail = 0;  /* 主循环读取位置 */
+
+void ESP8266_RxIRQPush(uint8_t byte)
+{
+    uint16_t next = (g_irq_head + 1) % ESP_RXBUF_SIZE;
+    if (next != g_irq_tail) {  /* 缓冲区未满才写入, 满了就丢弃最新字节 */
+        g_irq_buf[g_irq_head] = byte;
+        g_irq_head = next;
+    }
+}
+
 void ESP8266_Init(void)
 {
     MX_USART3_UART_Init();
     g_rx_idx = 0;
-    printf("[ESP8266] USART3 ready (115200 8N1)\r\n");
+    __HAL_UART_ENABLE_IT(&huart3, UART_IT_RXNE);
+    HAL_NVIC_SetPriority(USART3_IRQn, 1, 0);
+    HAL_NVIC_EnableIRQ(USART3_IRQn);
+    printf("[ESP8266] USART3 ready (115200 8N1, IRQ RX)\r\n");
 }
 
 int ESP8266_GetChar(void)
 {
-    if (__HAL_UART_GET_FLAG(&huart3, UART_FLAG_RXNE)) {
-        return (uint8_t)(huart3.Instance->DR & 0xFF);
-    }
-    return -1;
+    if (g_irq_tail == g_irq_head) return -1;  /* 缓冲区空 */
+    uint8_t ch = g_irq_buf[g_irq_tail];
+    g_irq_tail = (g_irq_tail + 1) % ESP_RXBUF_SIZE;
+    return ch;
 }
 
 void ESP8266_Send(const char *fmt, ...)
@@ -35,15 +54,13 @@ void ESP8266_Send(const char *fmt, ...)
     char buf[128];
     va_list args;
     va_start(args, fmt);
-    int len = vsnprintf(buf, sizeof(buf), fmt, args);
+    int len = vsprintf(buf, fmt, args);
     va_end(args);
 
-    if (len <= 0) return;
-    if ((size_t)len >= sizeof(buf)) len = sizeof(buf) - 1;
+    if (len <= 0 || (size_t)len >= sizeof(buf)) return;
 
     /* 追加 \n 换行 */
-    if ((size_t)len < sizeof(buf) - 1)
-        buf[len++] = '\n';
+    buf[len++] = '\n';
 
     HAL_UART_Transmit(&huart3, (uint8_t *)buf, len, 100);
 }

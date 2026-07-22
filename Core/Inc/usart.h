@@ -33,16 +33,18 @@ extern "C" {
 /* USER CODE END Includes */
 
 extern UART_HandleTypeDef huart1;
-extern UART_HandleTypeDef huart2;   /* HC-05 蓝牙 */
-extern UART_HandleTypeDef huart3;   /* ESP-01S WiFi */
+
+extern UART_HandleTypeDef huart2;
+
+extern UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
 
 void MX_USART1_UART_Init(void);
-void MX_USART2_UART_Init(void);     /* HC-05 蓝牙 */
-void MX_USART3_UART_Init(void);     /* ESP-01S WiFi */
+void MX_USART2_UART_Init(void);
+void MX_USART3_UART_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 

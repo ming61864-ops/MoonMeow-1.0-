@@ -1,8 +1,9 @@
 /**
- * ESP-01S 阿里云 IoT MQTT 固件
+ * ESP-01S 公共 MQTT Broker 测试固件
  * ================================
  *
- * 作用: WiFi联网 + MQTT连接阿里云IoT + STM32串口桥接
+ * 作用: WiFi联网 + MQTT连接公共broker + STM32串口桥接
+ * 默认broker: broker.emqx.io (测试用, 无需注册)
  *
  * STM32 ←→ ESP-01S 协议 (USART3, 115200):
  *   STM32→ESP: STATUS,<情绪>,<LDR>,<NTC>\n   → publish到云端
@@ -23,92 +24,40 @@
 #include <PubSubClient.h>
 
 /* ============ 用户配置 (修改这里!) ============ */
-const char* WIFI_SSID     = "你的WiFi名";
-const char* WIFI_PASS     = "你的WiFi密码";
+const char* WIFI_SSID     = "yqc";
+const char* WIFI_PASS     = "12345678";
 
-/* 阿里云 IoT 三元组 (控制台 → 设备详情) */
-const char* PRODUCT_KEY   = "你的ProductKey";
-const char* DEVICE_NAME   = "你的DeviceName";
-const char* DEVICE_SECRET = "你的DeviceSecret";
-
-/* MQTT 服务器地址 (根据你的实例区域调整) */
-const char* MQTT_HOST = "你的ProductKey.iot-as-mqtt.cn-shanghai.aliyuncs.com";
+/* MQTT 公共 broker (测试用) */
+const char* MQTT_HOST = "broker.emqx.io";
 const int   MQTT_PORT = 1883;
+
+/* Topic 前缀, 建议改成你自己的唯一标识, 避免和别人冲突 */
+const char* TOPIC_PREFIX  = "winner_mooncat";
 /* ============================================= */
 
 WiFiClient   wifiClient;
 PubSubClient mqttClient(wifiClient);
 
-/* ---- HMAC-SHA1 实现 ---- */
+char topicCmd[64];
+char topicStatus[64];
 
-#include <Hash.h>
-
-static String hmacSha1(const String &key, const String &data)
-{
-    uint8_t hmac_key[128];
-    const int BLOCK_SIZE = 64;
-    int key_len = key.length();
-
-    memset(hmac_key, 0, BLOCK_SIZE);
-    if (key_len > BLOCK_SIZE) {
-        sha1(key.c_str(), key_len, hmac_key);
-        key_len = 20;
-    } else {
-        memcpy(hmac_key, key.c_str(), key_len);
-    }
-
-    /* ipad / opad */
-    uint8_t ipad[BLOCK_SIZE + 64], opad[BLOCK_SIZE + 64];
-    for (int i = 0; i < BLOCK_SIZE; i++) {
-        ipad[i] = hmac_key[i] ^ 0x36;
-        opad[i] = hmac_key[i] ^ 0x5C;
-    }
-    memcpy(ipad + BLOCK_SIZE, data.c_str(), data.length());
-    memcpy(opad + BLOCK_SIZE, data.c_str(), data.length());  /* placeholder */
-
-    uint8_t inner_hash[20];
-    sha1(ipad, BLOCK_SIZE + data.length(), inner_hash);
-
-    memcpy(opad + BLOCK_SIZE, inner_hash, 20);
-    uint8_t result[20];
-    sha1(opad, BLOCK_SIZE + 20, result);
-
-    String hex;
-    for (int i = 0; i < 20; i++) {
-        char buf[3];
-        snprintf(buf, sizeof(buf), "%02X", result[i]);
-        hex += buf;
-    }
-    return hex;
-}
-
-/* ---- MQTT 连接 ---- */
+/* ---- MQTT 连接 (非阻塞) ---- */
 
 static void connectMQTT()
 {
     if (mqttClient.connected()) return;
 
-    String clientId = String(DEVICE_NAME) + "|securemode=3,signmethod=hmacsha1|";
-    String username  = String(DEVICE_NAME) + "&" + PRODUCT_KEY;
-    String password  = hmacSha1(DEVICE_SECRET, clientId);
+    String clientId = "mooncat-" + String(ESP.getChipId(), HEX);
 
     mqttClient.setServer(MQTT_HOST, MQTT_PORT);
     mqttClient.setKeepAlive(60);
 
-    Serial.print("[MQTT] Connecting...");
-    if (mqttClient.connect(clientId.c_str(), username.c_str(), password.c_str())) {
+    Serial.print("[MQTT] Connecting... RSSI=");
+    Serial.print(WiFi.RSSI());
+    Serial.print(" ");
+    if (mqttClient.connect(clientId.c_str())) {
         Serial.println("OK");
-
-        /* 订阅云端下发的属性设置和命令 */
-        String topic1 = "/sys/" + String(PRODUCT_KEY) + "/" + DEVICE_NAME + "/thing/service/property/set";
-        String topic2 = "/sys/" + String(PRODUCT_KEY) + "/" + DEVICE_NAME + "/thing/service/touch";
-        String topic3 = "/sys/" + String(PRODUCT_KEY) + "/" + DEVICE_NAME + "/thing/service/feed";
-        String topic4 = "/sys/" + String(PRODUCT_KEY) + "/" + DEVICE_NAME + "/thing/service/sleep";
-
-        mqttClient.subscribe(topic1.c_str());
-        mqttClient.subscribe(topic2.c_str());
-        mqttClient.subscribe(topic3.c_str());
-        mqttClient.subscribe(topic4.c_str());
+        mqttClient.subscribe(topicCmd);
         Serial.println("[MQTT] Subscribed");
     } else {
         Serial.print("FAILED, rc=");
@@ -120,32 +69,18 @@ static void connectMQTT()
 
 static void mqttCallback(char* topic, byte* payload, unsigned int length)
 {
-    /* 提取 topic 尾部 (最后一个 / 之后) 识别服务名 */
-    String t(topic);
-    int lastSlash = t.lastIndexOf('/');
-    String service = (lastSlash >= 0) ? t.substring(lastSlash + 1) : t;
+    String cmd;
+    for (unsigned int i = 0; i < length; i++) {
+        cmd += (char)payload[i];
+    }
+    cmd.trim();
+    cmd.toUpperCase();
 
-    /* 属性设置 → 解析指令 */
-    if (service == "set") {
-        String json;
-        json.concat((char*)payload, length);
-        /* 简单子串匹配, 不引入 JSON 库 */
-        if (json.indexOf("\"touch\"") > 0 || json.indexOf("TOUCH") > 0) {
-            Serial.println("CMD,TOUCH");
-        } else if (json.indexOf("\"feed\"") > 0 || json.indexOf("FEED") > 0) {
-            Serial.println("CMD,FEED");
-        } else if (json.indexOf("\"sleep\"") > 0 || json.indexOf("SLEEP") > 0) {
-            Serial.println("CMD,SLEEP");
-        }
-    }
-    /* 直接服务调用 */
-    else if (service == "touch") {
+    if (cmd == "TOUCH" || cmd == "T") {
         Serial.println("CMD,TOUCH");
-    }
-    else if (service == "feed") {
+    } else if (cmd == "FEED" || cmd == "F") {
         Serial.println("CMD,FEED");
-    }
-    else if (service == "sleep") {
+    } else if (cmd == "SLEEP" || cmd == "Z") {
         Serial.println("CMD,SLEEP");
     }
 }
@@ -154,15 +89,22 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length)
 
 static void publishStatus(const char* mood, int ldr, int ntc)
 {
-    String topic = "/sys/" + String(PRODUCT_KEY) + "/" + DEVICE_NAME + "/thing/event/property/post";
-    String payload = "{\"id\":\"1\",\"params\":{";
-    payload += "\"mood\":{\"value\":\"" + String(mood) + "\"},";
-    payload += "\"light\":{\"value\":" + String(ldr) + "},";
-    payload += "\"temp\":{\"value\":" + String(ntc) + "}";
-    payload += "},\"method\":\"thing.event.property.post\"}";
+    String payload = "{\"mood\":\"" + String(mood) + "\",";
+    payload += "\"light\":" + String(ldr) + ",";
+    payload += "\"temp\":" + String(ntc) + "}";
+
+    /* 诊断: 收到STATUS行的时刻 + MQTT连接状态 + publish结果 */
+    Serial.print("[ESP-RECV] tick=");
+    Serial.print(millis());
+    Serial.print(" mqttConnected=");
+    Serial.print(mqttClient.connected());
 
     if (mqttClient.connected()) {
-        mqttClient.publish(topic.c_str(), payload.c_str());
+        bool ok = mqttClient.publish(topicStatus, payload.c_str());
+        Serial.print(" publishOk=");
+        Serial.println(ok);
+    } else {
+        Serial.println(" publishOk=SKIP(not connected)");
     }
 }
 
@@ -187,6 +129,9 @@ static void processSerial()
                         int ntc = line.substring(comma2 + 1).toInt();
                         publishStatus(mood.c_str(), ldr, ntc);
                     }
+                } else {
+                    /* 非STATUS行也转发到MQTT, 方便调试 */
+                    mqttClient.publish(topicStatus, line.c_str());
                 }
             }
             line = "";
@@ -202,6 +147,10 @@ void setup()
 {
     Serial.begin(115200);
     Serial.println("\n[ESP] Booting MoonCat WiFi...");
+
+    /* 组装 topic */
+    snprintf(topicCmd, sizeof(topicCmd), "%s/cmd", TOPIC_PREFIX);
+    snprintf(topicStatus, sizeof(topicStatus), "%s/status", TOPIC_PREFIX);
 
     /* WiFi 连接 */
     WiFi.begin(WIFI_SSID, WIFI_PASS);
@@ -227,10 +176,14 @@ void setup()
 
 void loop()
 {
-    /* MQTT 保活 */
+    /* MQTT 保活 (非阻塞: 断线后每2秒重试一次, 不阻塞 processSerial) */
+    static uint32_t lastReconnect = 0;
     if (!mqttClient.connected()) {
-        delay(2000);
-        connectMQTT();
+        uint32_t nowMs = millis();
+        if (nowMs - lastReconnect >= 2000) {
+            lastReconnect = nowMs;
+            connectMQTT();
+        }
     }
     mqttClient.loop();
 

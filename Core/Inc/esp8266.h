@@ -20,6 +20,9 @@ void ESP8266_Send(const char *fmt, ...);
 /** 从 USART3 读一个字节 (非阻塞), -1=无数据 */
 int ESP8266_GetChar(void);
 
+/** 供 USART3_IRQHandler 调用: 把中断收到的字节存入环形缓冲区 */
+void ESP8266_RxIRQPush(uint8_t byte);
+
 /** 解析收到的字符, 返回解析出的命令类型, CMD_NONE=无 */
 #include "pet_fsm.h"  /* PetCmd_t */
 PetCmd_t ESP8266_Process(void);
