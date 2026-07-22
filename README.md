@@ -1,8 +1,8 @@
 # 月薪喵 MoonCat v2.0
 
-> 基于 STM32F103C8T6 的环境感知虚拟桌面宠物 · 128×64 OLED 全屏动画 · 5 状态情绪 FSM · HC-05 蓝牙控制 · MediaPipe 手势识别
+> 基于 STM32F103C8T6 的环境感知虚拟桌面宠物 · 128×64 OLED 全屏动画 · 5 状态情绪 FSM · HC-05 蓝牙控制 · ESP-01S WiFi/MQTT 远程联动
 
-月薪喵是一只跑在 0.96 寸 OLED 屏上的裸机嵌入式桌面宠物。它通过光敏、热敏传感器感知环境变化，自动在 5 种情绪状态间切换。支持三种交互方式：**CH340 串口**（调试+配置）、**HC-05 蓝牙**（手机/手柄远程控制）、**MediaPipe 手势识别**（PC 摄像头隔空操作）。传感器阈值保存在 SPI Flash 中，掉电不丢失。
+月薪喵是一只跑在 0.96 寸 OLED 屏上的裸机嵌入式桌面宠物。它通过光敏、热敏传感器感知环境变化，自动在 5 种情绪状态间切换。支持三种交互方式：**CH340 串口**（调试+配置）、**HC-05 蓝牙**（手机/手柄远程控制）、**ESP-01S WiFi**（MQTT 云端远程控制）。传感器阈值保存在 SPI Flash 中，掉电不丢失。
 
 ---
 
@@ -18,7 +18,7 @@
 | 有源蜂鸣器 | GPIO | PB0 | LOW=响，HIGH=静音 |
 | CH340 USB 转 TTL | USART1 115200 | PA9 TX / PA10 RX | 调试日志 + 串口命令 |
 | **HC-05 蓝牙** | **USART2 9600** | **PA2 TX / PA3 RX** | 手机遥控 + 传感器查询 |
-| **ESP-01S WiFi** | **USART3 115200** | **PB10 TX / PB11 RX** | 阿里云 IoT MQTT（待刷机） |
+| **ESP-01S WiFi** | **USART3 115200（中断接收）** | **PB10 TX / PB11 RX** | MQTT 云端远程控制 |
 | 板载 LED | GPIO | PC13 | 情绪闪烁指示 |
 
 ---
@@ -65,19 +65,22 @@
 | `w` | 保存到 Flash | `OK saved` |
 | `h` | 帮助 | 命令列表 |
 
-### 3. PC 手势识别（MediaPipe → 蓝牙）
+### 3. ESP-01S WiFi（MQTT 远程控制）
 
-| 手势 | 发送 | 宠物反应 |
-|------|------|---------|
-| ✋ 五指张开 | `t` | SURPRISE |
-| 👍 拇指向上 | `f` | HAPPY |
-| ✊ 握拳 | `z` | SLEEP |
-| ☝️ 食指向上 | `s` | 查询状态 |
+STM32 通过 USART3 与 ESP-01S 桥接，ESP-01S 连接 WiFi 后接入 MQTT broker（默认 `broker.emqx.io`，测试用公共服务器）。
 
-```bash
-pip install mediapipe opencv-python pyserial
-python Tools/gesture_control.py COM5
+| 方向 | Topic | 内容 |
+|------|-------|------|
+| STM32 → 云端 | `winner_mooncat/status` | `{"mood":"...","light":...,"temp":...}`，每 5 秒上报一次 |
+| 云端 → STM32 | `winner_mooncat/cmd` | 发送 `TOUCH` / `FEED` / `SLEEP` 纯文本 |
+
+用 MQTTX 等客户端连接 broker，订阅 `status` topic 查看宠物实时状态，向 `cmd` topic 发送指令远程控制宠物。
+
 ```
+Tools/esp8266_mqtt/esp8266_mqtt.ino   # ESP-01S 固件（Arduino IDE 烧录）
+```
+
+烧录前需在 `.ino` 顶部修改 `WIFI_SSID` / `WIFI_PASS` 为实际 WiFi 信息。
 
 ---
 
@@ -87,11 +90,11 @@ python Tools/gesture_control.py COM5
 应用层:      main.c（主循环调度 ~100 Hz）
 中间件层:    pet_fsm（FSM 情绪引擎）  gfx_engine（图形原语）
 驱动层:      ssd1306_i2c  w25q_spi  sensor  buzzer  flash_config
-             hc05（蓝牙单字符命令）  esp8266（WiFi AT 透传）
+             hc05（蓝牙单字符命令）  esp8266（WiFi 中断接收 + MQTT 桥接）
 HAL层:       STM32CubeF1（GPIO / I²C / SPI / ADC / TIM / USART1/2/3）
 ```
 
-全部驱动基于 STM32 HAL 库手写实现。裸机前后台架构，无 RTOS。三个 UART 全部启用，轮询接收。
+全部驱动基于 STM32 HAL 库手写实现。裸机前后台架构，无 RTOS。USART1/2 轮询接收，USART3（ESP-01S）中断接收 + 环形缓冲区。
 
 ---
 
@@ -126,8 +129,6 @@ stm32dog/
 │       ├── cat_sleep.c  cat_hot.c
 │       └── adc.c  gpio.c  i2c.c  spi.c  tim.c  usart.c  stm32f1xx_it.c
 ├── Tools/
-│   ├── gesture_control.py         # MediaPipe 手势识别 → 蓝牙
-│   ├── 手势识别控制方案.md          # 手势识别方案文档
 │   ├── esp8266_mqtt/              # ESP-01S Arduino MQTT 固件
 │   ├── convert_fullscreen.py      # 点阵数据格式转换
 │   ├── reduce_frames.py           # 帧数裁剪
@@ -135,8 +136,6 @@ stm32dog/
 ├── Drivers/                       # STM32CubeF1 HAL + CMSIS
 ├── MDK-ARM/                       # Keil 工程文件
 ├── README.md
-├── 项目流程规划.md
-├── 简介.txt
 └── stm32dog.ioc                   # CubeMX 工程配置
 ```
 
@@ -152,12 +151,9 @@ stm32dog/
 | W25Q Flash 配置持久化 | ✅ |
 | CH340 串口命令 | ✅ |
 | HC-05 蓝牙遥控 + 传感器查询 + 阈值调节 | ✅ |
-| MediaPipe 手势识别（PC 端） | ✅ 方案+代码完成，待实测 |
-| ESP-01S WiFi + 阿里云 IoT MQTT | ⏳ STM32 侧代码完成，待下载器刷机 |
+| ESP-01S WiFi + MQTT 远程控制 | ✅ 联调完成，USART3 中断接收 + 非阻塞重连 |
 
 ## 待做
 
-- [ ] ESP-01S 刷机 + MQTT 阿里云 IoT 联调
-- [ ] MediaPipe 手势识别实测
 - [ ] OLED 对比度自动调节
 - [ ] MCU 低功耗 STOP 模式
